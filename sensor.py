@@ -22,12 +22,8 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, CONF_PROCESSORS, DEFAULT_SCAN_INTERVAL
 
-try:
-    from .image_processing import ImageProcessor, create_processor
-    HAS_OPENCV_SUPPORT = True
-except ImportError:
-    from .image_processing_simple import SimpleImageProcessor as ImageProcessor, create_simple_processor as create_processor
-    HAS_OPENCV_SUPPORT = False
+# Always use the simple image processor since we're using minimal dependencies
+from .image_processing_simple import SimpleImageProcessor as ImageProcessor, create_simple_processor as create_processor
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -43,7 +39,7 @@ async def async_setup_entry(
     config = hass.data[DOMAIN][config_entry.entry_id]
 
     # Create coordinator for updating sensor data
-    coordinator = ImageSensorCoordinator(hass, config)
+    coordinator = ImageSensorCoordinator(hass, config, config_entry)
     
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()
@@ -68,19 +64,17 @@ async def async_setup_entry(
 class ImageSensorCoordinator(DataUpdateCoordinator):
     """Class to manage fetching data from image processing."""
 
-    def __init__(self, hass: HomeAssistant, config: Dict[str, Any]) -> None:
+    def __init__(self, hass: HomeAssistant, config: Dict[str, Any], config_entry: ConfigEntry) -> None:
         """Initialize."""
         self.config = config
-        self.image_processor = ImageProcessor(hass, config)
+        self.config_entry = config_entry
+        # Use config entry title as base sensor name for image processor
+        base_sensor_name = config_entry.title
+        self.image_processor = ImageProcessor(hass, config, base_sensor_name)
         self.processors = []
         
         # Create processors based on configuration
-        for processor_config in config.get(CONF_PROCESSORS, []):
-            processor = create_processor(
-                processor_config["type"], 
-                processor_config["config"]
-            )
-            self.processors.append(processor)
+        self._create_processors()
 
         super().__init__(
             hass,
@@ -88,6 +82,28 @@ class ImageSensorCoordinator(DataUpdateCoordinator):
             name=DOMAIN,
             update_interval=SCAN_INTERVAL,
         )
+
+    def _create_processors(self) -> None:
+        """Create processors based on current configuration."""
+        self.processors = []
+        for i, processor_config in enumerate(self.config.get(CONF_PROCESSORS, [])):
+            # Create a sensor name for this processor
+            sensor_name = f"{self.config_entry.title}_processor_{i}"
+            processor = create_processor(
+                processor_config["type"], 
+                processor_config["config"],
+                sensor_name
+            )
+            self.processors.append(processor)
+
+    def update_config(self, new_config: Dict[str, Any]) -> None:
+        """Update configuration and recreate processors."""
+        self.config = new_config
+        # Recreate image processor with new config
+        base_sensor_name = self.config_entry.title
+        self.image_processor = ImageProcessor(self.hass, new_config, base_sensor_name)
+        # Recreate processors
+        self._create_processors()
 
     async def _async_update_data(self) -> Dict[str, Any]:
         """Update data via library."""

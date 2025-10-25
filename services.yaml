@@ -10,3 +10,54 @@ process_image:
         entity:
           domain: sensor
           integration: image_to_sensor_cv
+
+enable_debug_logging:
+  name: Enable Debug Logging
+  description: Enable detailed debug logging for Image to Sensor CV detection. This will create debug images in /config/www/image_to_sensor_cv_debug/ and provide detailed logs.
+
+disable_debug_logging:
+  name: Disable Debug Logging
+  description: Disable debug logging for Image to Sensor CV and return to normal logging level.
+
+generate_preview:
+  name: Generate Preview
+  description: Generate a preview image showing the current image with crop area overlay
+  fields:
+    config_entry_id:
+      name: Config Entry ID
+      description: The configuration entry ID for the Image to Sensor CV integration
+      required: true
+      selector:
+        text:
+    crop_x:
+      name: Crop X Position
+      description: X position for crop area (pixels from left)
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 9999
+    crop_y:
+      name: Crop Y Position
+      description: Y position for crop area (pixels from top)
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 9999
+    crop_width:
+      name: Crop Width
+      description: Width of crop area in pixels
+      default: 100
+      selector:
+        number:
+          min: 1
+          max: 9999
+    crop_height:
+      name: Crop Height
+      description: Height of crop area in pixels
+      default: 100
+      selector:
+        number:
+          min: 1
+          max: 9999

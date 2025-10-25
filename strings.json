@@ -51,9 +51,27 @@
   "options": {
     "step": {
       "init": {
-        "title": "Update Image to Sensor CV Options",
-        "description": "Update configuration options"
+        "title": "Update Image to Sensor CV Configuration",
+        "description": "Update all configuration settings. Only the relevant field for your selected image source will be shown.",
+        "data": {
+          "image_source": "Image Source",
+          "image_path": "Local Image File Path",
+          "camera_entity": "Camera Entity",
+          "crop_x": "Crop X Position (pixels)",
+          "crop_y": "Crop Y Position (pixels)",
+          "crop_width": "Crop Width (pixels)",
+          "crop_height": "Crop Height (pixels)",
+          "min_angle_hours": "Minimum Angle (clock hours, 0-12)",
+          "max_angle_hours": "Maximum Angle (clock hours, 0-12)",
+          "min_value": "Minimum Gauge Value",
+          "max_value": "Maximum Gauge Value",
+          "units": "Units (optional)"
+        }
       }
+
+    },
+    "error": {
+      "required": "This field is required for the selected image source"
     }
   }
 }

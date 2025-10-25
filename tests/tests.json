@@ -1,0 +1,21 @@
+[
+    {
+        "file": "pressure-heat-last.jpg",
+        "start_angle": "7am",
+        "end_angle": "5am",
+        "min_value": 0,
+        "max_value": 6,
+        "detected_angle": "10.5am",
+        "expected_value": 2.0
+    },
+    {
+        "file": "pressure-water-last.jpg",
+        "start_angle": "7am",
+        "end_angle": "4.5am",
+        "min_value": 0,
+        "max_value": 6,
+        "detected_angle": "11.5am",
+        "expected_value": 2.5
+    }
+
+]

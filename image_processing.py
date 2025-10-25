@@ -63,16 +63,26 @@ class ImageProcessor:
                 _LOGGER.error("Image file not found: %s", image_path)
                 return None
 
-            # Load image using PIL first, then convert to OpenCV format
-            pil_image = Image.open(image_path)
-            # Convert PIL image to RGB (from potential RGBA or other formats)
-            pil_image = pil_image.convert('RGB')
-            # Convert to numpy array and then to BGR for OpenCV
-            image_array = np.array(pil_image)
-            # Convert RGB to BGR for OpenCV
-            bgr_image = cv2.cvtColor(image_array, cv2.COLOR_RGB2BGR)
+            # Use executor to avoid blocking I/O
+            loop = asyncio.get_event_loop()
             
-            return bgr_image
+            def _load_image():
+                # Load image using PIL first
+                pil_image = Image.open(image_path)
+                # Convert PIL image to RGB (from potential RGBA or other formats)
+                pil_image = pil_image.convert('RGB')
+                # Convert to numpy array
+                image_array = np.array(pil_image)
+                
+                # Convert RGB to BGR for OpenCV if available
+                if HAS_OPENCV:
+                    bgr_image = cv2.cvtColor(image_array, cv2.COLOR_RGB2BGR)
+                    return bgr_image
+                else:
+                    return image_array
+            
+            return await loop.run_in_executor(None, _load_image)
+            
         except Exception as e:
             _LOGGER.error("Error loading image from file: %s", e)
             return None

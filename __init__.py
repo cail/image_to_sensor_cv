@@ -32,6 +32,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Set up services
     await async_setup_services(hass)
     
+    # Add update listener for config entry changes
+    entry.async_on_unload(entry.add_update_listener(async_update_options))
+    
     return True
 
 
@@ -45,6 +48,15 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await async_unload_services(hass)
 
     return unload_ok
+
+
+async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Update options."""
+    # Update the stored data with new configuration
+    hass.data[DOMAIN][entry.entry_id] = entry.data
+    
+    # Reload the entry to apply changes
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
