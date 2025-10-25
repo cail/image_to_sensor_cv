@@ -21,7 +21,13 @@ from homeassistant.helpers.update_coordinator import (
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, CONF_PROCESSORS, DEFAULT_SCAN_INTERVAL
-from .image_processing import ImageProcessor, create_processor
+
+try:
+    from .image_processing import ImageProcessor, create_processor
+    HAS_OPENCV_SUPPORT = True
+except ImportError:
+    from .image_processing_simple import SimpleImageProcessor as ImageProcessor, create_simple_processor as create_processor
+    HAS_OPENCV_SUPPORT = False
 
 _LOGGER = logging.getLogger(__name__)
 

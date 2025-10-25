@@ -7,7 +7,14 @@ import asyncio
 import os
 from pathlib import Path
 
-import cv2
+try:
+    import cv2
+    HAS_OPENCV = True
+except ImportError:
+    HAS_OPENCV = False
+    _LOGGER = logging.getLogger(__name__)
+    _LOGGER.warning("OpenCV not available. Image processing features will be limited.")
+
 import numpy as np
 from PIL import Image
 import aiohttp
@@ -128,6 +135,10 @@ class AnalogGaugeProcessor:
 
     def process_image(self, image: np.ndarray) -> Optional[float]:
         """Process image and extract gauge value."""
+        if not HAS_OPENCV:
+            _LOGGER.error("OpenCV is required for analog gauge processing but not available")
+            return None
+            
         try:
             return self._read_analog_gauge(image)
         except Exception as e:
