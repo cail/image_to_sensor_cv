@@ -1,0 +1,52 @@
+# Example configuration for Image to Sensor CV
+# This file shows examples of how to configure the integration
+
+# Example 1: Reading pressure gauge from a camera
+# Configuration via UI:
+# - Name: "Pressure Gauge Monitor"
+# - Image Source: "Home Assistant Camera"  
+# - Camera Entity: "camera.pressure_gauge_cam"
+# - Crop: X=100, Y=50, Width=400, Height=400
+# - Min Angle: 7 (7 o'clock position)
+# - Max Angle: 5 (5 o'clock position) 
+# - Min Value: 0
+# - Max Value: 100
+# - Units: "psi"
+
+# Example 2: Reading temperature gauge from local file
+# Configuration via UI:
+# - Name: "Temperature Gauge Reader"
+# - Image Source: "Local Image File"
+# - Image Path: "/config/www/temp_gauge.jpg"
+# - Crop: X=0, Y=0, Width=100, Height=100 (full image)
+# - Min Angle: 8 (8 o'clock position)
+# - Max Angle: 4 (4 o'clock position)
+# - Min Value: -20
+# - Max Value: 50  
+# - Units: "°C"
+
+# The integration will create sensor entities like:
+# - sensor.pressure_gauge_monitor_analog_gauge_reader_1
+# - sensor.temperature_gauge_reader_analog_gauge_reader_1
+
+# You can then use these sensors in automations, lovelace cards, etc.
+
+# Example automation:
+# automation:
+#   - alias: "High Pressure Alert"  
+#     trigger:
+#       - platform: numeric_state
+#         entity_id: sensor.pressure_gauge_monitor_analog_gauge_reader_1
+#         above: 80
+#     action:
+#       - service: notify.mobile_app
+#         data:
+#           message: "Pressure is high: {{ states('sensor.pressure_gauge_monitor_analog_gauge_reader_1') }} psi"
+
+# Example Lovelace card:
+# type: gauge
+# entity: sensor.pressure_gauge_monitor_analog_gauge_reader_1
+# min: 0
+# max: 100
+# name: Pressure
+# unit: psi

@@ -1,0 +1,12 @@
+{
+  "domain": "image_to_sensor_cv",
+  "name": "Image to Sensor CV",
+  "version": "1.0.0",
+  "documentation": "https://github.com/your-username/image-to-sensor-cv",
+  "dependencies": [],
+  "codeowners": ["@your-username"],
+  "requirements": ["opencv-python>=4.5.0", "numpy>=1.20.0", "pillow>=9.0.0"],
+  "iot_class": "local_polling",
+  "config_flow": true,
+  "integration_type": "device"
+}

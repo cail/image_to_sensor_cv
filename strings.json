@@ -1,0 +1,59 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Image to Sensor CV Setup",
+        "description": "Set up Image to Sensor CV integration",
+        "data": {
+          "name": "Integration Name",
+          "image_source": "Image Source"
+        }
+      },
+      "image_config": {
+        "title": "Image Source Configuration",
+        "description": "Configure your image source",
+        "data": {
+          "image_path": "Local Image File Path",
+          "camera_entity": "Camera Entity"
+        }
+      },
+      "crop_config": {
+        "title": "Image Cropping Configuration",
+        "description": "Configure image cropping (optional)",
+        "data": {
+          "crop_x": "Crop X Position (pixels)",
+          "crop_y": "Crop Y Position (pixels)",
+          "crop_width": "Crop Width (pixels)",
+          "crop_height": "Crop Height (pixels)"
+        }
+      },
+      "processor_config": {
+        "title": "Analog Gauge Reader Configuration",
+        "description": "Configure the analog gauge reader processor",
+        "data": {
+          "min_angle_hours": "Minimum Angle (clock hours, 0-12)",
+          "max_angle_hours": "Maximum Angle (clock hours, 0-12)",
+          "min_value": "Minimum Gauge Value",
+          "max_value": "Maximum Gauge Value",
+          "units": "Units (optional)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to image source",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "Integration is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Update Image to Sensor CV Options",
+        "description": "Update configuration options"
+      }
+    }
+  }
+}
