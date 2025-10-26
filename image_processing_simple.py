@@ -163,8 +163,9 @@ class SimpleAnalogGaugeProcessor:
         try:
             height, width = gray_array.shape
             # Search within reasonable radius
-            radius = min(width, height) // 4
-            _LOGGER.debug("Starting needle detection - center: (%d, %d), radius: %d", cx, cy, radius)
+            needle_end_radius = min(width, height) // 4
+            needle_start_radius = 2  # Avoid center noise
+            _LOGGER.debug("Starting needle detection - center: (%d, %d), radius: %d", cx, cy, needle_end_radius)
             
             best_angle = None
             best_score = float('inf')
@@ -178,8 +179,8 @@ class SimpleAnalogGaugeProcessor:
                 # Sample points along this angle
                 score = 0.0  # Use float to prevent overflow
                 valid_points = 0
-                
-                for r in range(10, radius, 1):  # Skip very center, sample every 3 pixels
+
+                for r in range(needle_start_radius, needle_end_radius, 1):  # Skip very center, sample every 1 pixels
                     # Fix: Image coordinates have Y-axis flipped (0,0 is top-left)
                     # Standard math: angle 0° = right (3 o'clock), 90° = up (12 o'clock)
                     # For gauge: angle 0° = up (12 o'clock), 90° = right (3 o'clock)
@@ -209,7 +210,7 @@ class SimpleAnalogGaugeProcessor:
             
             if best_angle is not None:
                 # Refine the best angle by scanning ±2 degrees in 1-degree increments
-                refined_angle = self._refine_needle_angle(gray_array, cx, cy, best_angle, radius)
+                refined_angle = self._refine_needle_angle(gray_array, cx, cy, best_angle, needle_end_radius)
                 if refined_angle is not None:
                     _LOGGER.debug("Refined needle angle from %d° to %.1f°", best_angle, refined_angle)
                     best_angle = refined_angle
@@ -227,7 +228,7 @@ class SimpleAnalogGaugeProcessor:
                         save_debug_image(gray_array, "gauge_processed.png", "grayscale", self.sensor_name)
                         
                         # Create and save detection overlay (using math convention angle)
-                        overlay = create_detection_overlay(gray_array, cx, cy, best_angle, radius)
+                        overlay = create_detection_overlay(gray_array, cx, cy, best_angle, needle_end_radius)
                         save_debug_image(overlay, "gauge_detection.png", "overlay", self.sensor_name)
                 except Exception as debug_e:
                     _LOGGER.warning("Could not save debug images: %s", debug_e)
