@@ -9,12 +9,8 @@ import os
 
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
-import aiohttp
 
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-
-from .const import (
+from const import (
     SOURCE_FILE,
     SOURCE_CAMERA,
     PROCESSOR_ANALOG_GAUGE,
@@ -30,118 +26,13 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+class SimpleAnalogGaugeProcessor:
+    """Simplified analog gauge processor using PIL instead of OpenCV."""
 
-class SimpleImageProcessor:
-    """Simplified image processor using only PIL/Pillow."""
-
-    def __init__(self, hass: HomeAssistant, config: Dict[str, Any], sensor_name: str = "unknown"):
-        """Initialize the image processor."""
-        self.hass = hass
+    def __init__(self, config: Dict[str, Any], sensor_name: str = "unknown"):
+        """Initialize the analog gauge processor."""
         self.config = config
         self.sensor_name = sensor_name
-
-    async def get_image(self) -> Optional[np.ndarray]:
-        """Get image from configured source."""
-        _LOGGER.debug("Getting image from source: %s", self.config[CONF_IMAGE_SOURCE])
-        
-        if self.config[CONF_IMAGE_SOURCE] == SOURCE_FILE:
-            result = await self._get_image_from_file()
-        elif self.config[CONF_IMAGE_SOURCE] == SOURCE_CAMERA:
-            result = await self._get_image_from_camera()
-        else:
-            _LOGGER.error("Unknown image source: %s", self.config[CONF_IMAGE_SOURCE])
-            return None
-            
-        if result is not None:
-            _LOGGER.debug("Successfully acquired image with shape: %s", result.shape)
-        else:
-            _LOGGER.warning("Failed to acquire image from source")
-            
-        return result
-
-    async def _get_image_from_file(self) -> Optional[np.ndarray]:
-        """Load image from file path."""
-        try:
-            image_path = self.config[CONF_IMAGE_PATH]
-            _LOGGER.debug("Loading image from file: %s", image_path)
-            
-            if not os.path.exists(image_path):
-                _LOGGER.error("Image file not found: %s", image_path)
-                # List files in the directory for debugging
-                try:
-                    dir_path = os.path.dirname(image_path)
-                    if os.path.exists(dir_path):
-                        files = os.listdir(dir_path)
-                        _LOGGER.debug("Files in directory %s: %s", dir_path, files[:10])  # Limit to first 10
-                except Exception as dir_e:
-                    _LOGGER.debug("Could not list directory contents: %s", dir_e)
-                return None
-
-            # Use executor to avoid blocking I/O
-            loop = asyncio.get_event_loop()
-            
-            def _load_image():
-                _LOGGER.debug("Opening image file with PIL")
-                # Load image using PIL
-                pil_image = Image.open(image_path)
-                _LOGGER.debug("Original image mode: %s, size: %s", pil_image.mode, pil_image.size)
-                # Convert to RGB
-                pil_image = pil_image.convert('RGB')
-                _LOGGER.debug("Converted to RGB, size: %s", pil_image.size)
-                # Convert to numpy array
-                image_array = np.array(pil_image)
-                _LOGGER.debug("Converted to numpy array, shape: %s, dtype: %s", 
-                             image_array.shape, image_array.dtype)
-                return image_array
-            
-            result = await loop.run_in_executor(None, _load_image)
-            _LOGGER.debug("Image loaded successfully from file")
-            
-            # Save debug image of original loaded image
-            try:
-                from .debug_utils import save_debug_image
-                if _LOGGER.isEnabledFor(logging.DEBUG):
-                    save_debug_image(result, "original.png", "loaded", self.sensor_name)
-            except Exception as debug_e:
-                _LOGGER.warning("Could not save original debug image: %s", debug_e)
-            
-            return result
-            
-        except Exception as e:
-            _LOGGER.error("Error loading image from file: %s", e)
-            import traceback
-            _LOGGER.error("Traceback: %s", traceback.format_exc())
-            return None
-
-    async def _get_image_from_camera(self) -> Optional[np.ndarray]:
-        """Get image from Home Assistant camera entity."""
-        try:
-            camera_entity = self.config[CONF_CAMERA_ENTITY]
-            
-            # Get camera image URL
-            camera_image_url = f"/api/camera_proxy/{camera_entity}"
-            
-            session = async_get_clientsession(self.hass)
-            
-            async with session.get(
-                f"http://localhost:8123{camera_image_url}",
-                headers={"Authorization": f"Bearer {self.hass.auth.async_create_access_token()}"}
-            ) as response:
-                if response.status == 200:
-                    image_data = await response.read()
-                    # Use PIL to decode image
-                    from io import BytesIO
-                    pil_image = Image.open(BytesIO(image_data))
-                    pil_image = pil_image.convert('RGB')
-                    image_array = np.array(pil_image)
-                    return image_array
-                else:
-                    _LOGGER.error("Failed to get camera image, status: %s", response.status)
-                    return None
-                    
-        except Exception as e:
-            _LOGGER.error("Error getting image from camera: %s", e)
-            return None
 
     def crop_image(self, image: np.ndarray) -> np.ndarray:
         """Crop image based on configuration."""
@@ -185,19 +76,12 @@ class SimpleImageProcessor:
         return cropped
 
 
-class SimpleAnalogGaugeProcessor:
-    """Simplified analog gauge processor using PIL instead of OpenCV."""
-
-    def __init__(self, config: Dict[str, Any], sensor_name: str = "unknown"):
-        """Initialize the analog gauge processor."""
-        self.config = config
-        self.sensor_name = sensor_name
-
     def process_image(self, image: np.ndarray) -> Optional[float]:
         """Process image and extract gauge value using simplified method."""
         try:
             _LOGGER.debug("=== Starting gauge image processing ===")
             _LOGGER.debug("Processor config: %s", self.config)
+            image = self.crop_image(image)
             result = self._read_analog_gauge_simple(image)
             _LOGGER.debug("=== Gauge processing complete, result: %s ===", result)
             return result
@@ -225,9 +109,12 @@ class SimpleAnalogGaugeProcessor:
             _LOGGER.debug("Converted to grayscale")
             
             # Apply some basic filtering to enhance edges
-            enhanced = gray_image.filter(ImageFilter.EDGE_ENHANCE_MORE)
-            _LOGGER.debug("Applied edge enhancement filter")
-            
+            if False:
+                enhanced = gray_image.filter(ImageFilter.EDGE_ENHANCE_MORE)
+                _LOGGER.debug("Applied edge enhancement filter")
+            else:
+                enhanced = gray_image
+
             # Convert back to numpy for analysis
             gray_array = np.array(enhanced)
             _LOGGER.debug("Gray array shape: %s, dtype: %s", gray_array.shape, gray_array.dtype)
@@ -255,7 +142,7 @@ class SimpleAnalogGaugeProcessor:
             
             # Log detection summary at info level for easier monitoring
             try:
-                from .debug_utils import log_detection_summary
+                from debug_utils import log_detection_summary
                 log_detection_summary(needle_angle, value, self.config)
             except Exception as summary_e:
                 _LOGGER.warning("Could not log detection summary: %s", summary_e)
@@ -275,7 +162,8 @@ class SimpleAnalogGaugeProcessor:
         """
         try:
             height, width = gray_array.shape
-            radius = min(width, height) // 3  # Search within reasonable radius
+            # Search within reasonable radius
+            radius = min(width, height) // 4
             _LOGGER.debug("Starting needle detection - center: (%d, %d), radius: %d", cx, cy, radius)
             
             best_angle = None
@@ -291,7 +179,7 @@ class SimpleAnalogGaugeProcessor:
                 score = 0.0  # Use float to prevent overflow
                 valid_points = 0
                 
-                for r in range(10, radius, 3):  # Skip very center, sample every 3 pixels
+                for r in range(10, radius, 1):  # Skip very center, sample every 3 pixels
                     # Fix: Image coordinates have Y-axis flipped (0,0 is top-left)
                     # Standard math: angle 0° = right (3 o'clock), 90° = up (12 o'clock)
                     # For gauge: angle 0° = up (12 o'clock), 90° = right (3 o'clock)
@@ -328,13 +216,12 @@ class SimpleAnalogGaugeProcessor:
                 
                 _LOGGER.debug("Final needle angle: %.1f° (math convention), best score: %.2f", best_angle, best_score)
                 
-                # Convert to clock convention for display
-                clock_angle_display = (90 - best_angle) % 360
+                clock_angle_display = best_angle #(90 - best_angle) % 360
                 _LOGGER.debug("Needle angle in clock convention: %.1f°", clock_angle_display)
                 
                 # Save debug images if logging is at debug level
                 try:
-                    from .debug_utils import save_debug_image, create_detection_overlay
+                    from debug_utils import save_debug_image, create_detection_overlay
                     if _LOGGER.isEnabledFor(logging.DEBUG):
                         # Save the processed grayscale image
                         save_debug_image(gray_array, "gauge_processed.png", "grayscale", self.sensor_name)

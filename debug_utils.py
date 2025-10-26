@@ -10,12 +10,18 @@ from PIL import Image
 
 _LOGGER = logging.getLogger(__name__)
 
+DEBUG_DIR = "/config/www/image_to_sensor_cv_debug"
+
+def set_debug_directory(path: str) -> None:
+    """Set the directory where debug images will be saved."""
+    global DEBUG_DIR
+    DEBUG_DIR = path
 
 def save_debug_image(image_array: np.ndarray, filename: str, stage: str = "", sensor_name: str = "unknown") -> None:
     """Save debug image to help with troubleshooting."""
     try:
         # Create debug directory if it doesn't exist
-        debug_dir = "/config/www/image_to_sensor_cv_debug"
+        debug_dir = DEBUG_DIR
         os.makedirs(debug_dir, exist_ok=True)
         
         # Clean sensor name for filename (remove invalid characters)
@@ -97,9 +103,11 @@ def create_detection_overlay(image_array: np.ndarray, center_x: int, center_y: i
         cv_y, cv_x = max(0, center_y-2), max(0, center_x-2)
         overlay[cv_y:center_y+3, cv_x:center_x+3] = [255, 0, 0]  # Red center
         
+        math_angle = needle_angle
+        
         # Draw detected needle line (green)
         import math
-        angle_rad = math.radians(needle_angle)
+        angle_rad = math.radians(math_angle)
         # Fix: Use same coordinate system as detection (Y-axis flipped)
         end_x = int(center_x + radius * math.cos(angle_rad))
         end_y = int(center_y - radius * math.sin(angle_rad))  # Flip Y for image coordinates
