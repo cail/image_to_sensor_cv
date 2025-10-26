@@ -83,6 +83,9 @@ format:
 	@isort *.py
 	@echo "✓ Code formatted"
 
+test:
+	python3 -m tests.validate_vectors
+
 install:
 	@./validate.sh setup
 

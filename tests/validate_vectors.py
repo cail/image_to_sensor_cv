@@ -13,42 +13,82 @@ import sys
 import numpy as np
 from PIL import Image
 from typing import Optional
+from unittest.mock import MagicMock
 
-# Add parent directory to path to import the processor
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Set up paths FIRST
+script_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(script_dir)
+grandparent_dir = os.path.dirname(parent_dir)
 
-DEBUG = 1
+# Add grandparent to path so we can import the package
+sys.path.insert(0, grandparent_dir)
+
+# Mock Home Assistant packages BEFORE any imports from your package
+sys.modules['homeassistant'] = MagicMock()
+sys.modules['homeassistant.core'] = MagicMock()
+sys.modules['homeassistant.config_entries'] = MagicMock()
+sys.modules['homeassistant.const'] = MagicMock()
+sys.modules['homeassistant.helpers'] = MagicMock()
+sys.modules['homeassistant.helpers.typing'] = MagicMock()
+sys.modules['homeassistant.components'] = MagicMock()
+sys.modules['homeassistant.components.sensor'] = MagicMock()
+
+sys.modules['voluptuous'] = MagicMock()
+
+
+DEBUG = 0
 
 # Mock Home Assistant dependencies for standalone testing
 class MockLogger:
     def debug(self, msg, *args, **kwargs):
-        print(f"DEBUG: {msg % args}") if DEBUG else None
+        if DEBUG and args:
+            print(f"DEBUG: {msg % args}")
+        elif DEBUG:
+            print(f"DEBUG: {msg}")
+    
     def warning(self, msg, *args, **kwargs):
-        print(f"WARNING: {msg % args}") if DEBUG else None
+        if args:
+            print(f"WARNING: {msg % args}")
+        else:
+            print(f"WARNING: {msg}")
+    
     def error(self, msg, *args, **kwargs):
-        print(f"ERROR: {msg % args}") if DEBUG else None
+        if args:
+            print(f"ERROR: {msg % args}")
+        else:
+            print(f"ERROR: {msg}")
+    
     def info(self, msg, *args, **kwargs):
-        print(f"INFO: {msg % args}") if DEBUG else None
+        if DEBUG and args:
+            print(f"INFO: {msg % args}")
+        elif DEBUG:
+            print(f"INFO: {msg}")
+    
     def isEnabledFor(self, level):
         return DEBUG > 0
 
 class MockHomeAssistant:
     pass
 
+# NOW we can import from the package
 try:
-    from image_processing_simple import SimpleAnalogGaugeProcessor
+    from image_to_sensor_cv.image_processing_simple import SimpleAnalogGaugeProcessor
     # Replace the module-level logger with our mock
-    import image_processing_simple
+    from image_to_sensor_cv import image_processing_simple
     image_processing_simple._LOGGER = MockLogger()
     PROCESSOR_AVAILABLE = True
 except ImportError as e:
     print(f"⚠️  Warning: Could not import SimpleAnalogGaugeProcessor: {e}")
     print("   Processor validation will be skipped.")
+    import traceback
+    traceback.print_exc()
     PROCESSOR_AVAILABLE = False
 
-import debug_utils
-
-debug_utils.set_debug_directory("./image_to_sensor_cv_debug")
+try:
+    from image_to_sensor_cv import debug_utils
+    debug_utils.set_debug_directory("./image_to_sensor_cv_debug")
+except ImportError as e:
+    print(f"⚠️  Warning: Could not import debug_utils: {e}")
 
 def time_to_degrees(time_str) -> float:
 
@@ -183,7 +223,7 @@ def validate_test_vector(test_case: dict) -> dict:
             'expected_value': expected_val,
             'error': error,
             'error_percent': error_percent,
-            'message': 'OK' if error < 0.2 else f'High error: {error:.3f}'
+            'message': 'OK' if error_percent < 5 else f'High error: {error:.3f}'
         }
         
     except Exception as e:
@@ -203,8 +243,9 @@ def main():
         print("⚠️  SimpleAnalogGaugeProcessor not available - only validating math")
     
     # Load current test file
-    if os.path.exists('tests.json'):
-        with open('tests.json', 'r') as f:
+    testcases = 'tests/tests.json'
+    if os.path.exists(testcases):
+        with open(testcases, 'r') as f:
             test_data = json.load(f)
     else:
         print("❌ tests.json not found!")
@@ -236,9 +277,9 @@ def main():
         print(f"  Calculated: {result['calculated_value']:.3f}")
         print(f"  Error: {result['error']:.3f} ({result['error_percent']:.1f}%)")
         
-        if result['error'] < 0.1:
+        if result['error_percent'] < 3:
             print(f"  ✅ {result['message']}")
-        elif result['error'] < 0.2:
+        elif result['error_percent'] < 5:
             print(f"  ⚠️  {result['message']}")
         else:
             print(f"  ❌ {result['message']}")
