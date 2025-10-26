@@ -6,6 +6,7 @@ import logging
 import math
 from typing import Any, Dict, Optional
 import os
+from datetime import timedelta
 
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
@@ -13,6 +14,8 @@ import aiohttp
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.components.http.auth import async_sign_path
+from homeassistant.helpers.network import get_url
 
 from .const import (
     SOURCE_FILE,
@@ -120,12 +123,21 @@ class SimpleImageProcessor:
             # Get camera image URL
             camera_image_url = f"/api/camera_proxy/{camera_entity}"
             
+            # Sign the URL with authorization signature (5 minute expiration)
+            _LOGGER.debug("Signing camera proxy URL: %s", camera_image_url)
+            signed_url = async_sign_path(
+                self.hass, camera_image_url, timedelta(minutes=5)
+            )
+            _LOGGER.debug("Signed URL: %s", signed_url)
+            
+            # Get base URL and construct full URL
+            base_url = get_url(self.hass)
+            full_url = f"{base_url}{signed_url}"
+            _LOGGER.debug("Full camera URL: %s", full_url)
+            
             session = async_get_clientsession(self.hass)
             
-            async with session.get(
-                f"http://localhost:8123{camera_image_url}",
-                headers={"Authorization": f"Bearer {self.hass.auth.async_create_access_token()}"}
-            ) as response:
+            async with session.get(full_url) as response:
                 if response.status == 200:
                     image_data = await response.read()
                     # Use PIL to decode image
@@ -133,6 +145,7 @@ class SimpleImageProcessor:
                     pil_image = Image.open(BytesIO(image_data))
                     pil_image = pil_image.convert('RGB')
                     image_array = np.array(pil_image)
+                    _LOGGER.debug("Successfully retrieved camera image, shape: %s", image_array.shape)
                     return image_array
                 else:
                     _LOGGER.error("Failed to get camera image, status: %s", response.status)
@@ -140,6 +153,8 @@ class SimpleImageProcessor:
                     
         except Exception as e:
             _LOGGER.error("Error getting image from camera: %s", e)
+            import traceback
+            _LOGGER.error("Traceback: %s", traceback.format_exc())
             return None
 
     def crop_image(self, image: np.ndarray) -> np.ndarray:
