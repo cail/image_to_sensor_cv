@@ -23,7 +23,8 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN, CONF_PROCESSORS, DEFAULT_SCAN_INTERVAL
 
 # Always use the simple image processor since we're using minimal dependencies
-from .image_processing_simple import SimpleImageProcessor as ImageProcessor, create_simple_processor as create_processor
+from .image_processing_simple import create_simple_processor as create_processor
+from .image_processing_ha import SimpleImageProcessor as ImageProcessor
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,29 +37,45 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Image to Sensor CV sensor platform."""
-    config = hass.data[DOMAIN][config_entry.entry_id]
-
-    # Create coordinator for updating sensor data
-    coordinator = ImageSensorCoordinator(hass, config, config_entry)
+    _LOGGER.debug("Starting sensor platform setup for entry: %s", config_entry.entry_id)
     
-    # Fetch initial data
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        config = hass.data[DOMAIN][config_entry.entry_id]
 
-    # Create sensor entities for each processor
-    entities = []
-    processors = config.get(CONF_PROCESSORS, [])
-    
-    for i, processor_config in enumerate(processors):
-        entities.append(
-            ImageSensorEntity(
-                coordinator=coordinator,
-                config_entry=config_entry,
-                processor_index=i,
-                processor_config=processor_config,
+        # Create coordinator for updating sensor data
+        coordinator = ImageSensorCoordinator(hass, config, config_entry)
+        
+        _LOGGER.debug("Created coordinator, performing first refresh")
+        # Fetch initial data
+        await coordinator.async_config_entry_first_refresh()
+        
+        _LOGGER.debug("First refresh complete")
+
+        # Create sensor entities for each processor
+        entities = []
+        processors = config.get(CONF_PROCESSORS, [])
+        
+        _LOGGER.debug("Creating %d sensor entities", len(processors))
+        for i, processor_config in enumerate(processors):
+            entities.append(
+                ImageSensorEntity(
+                    coordinator=coordinator,
+                    config_entry=config_entry,
+                    processor_index=i,
+                    processor_config=processor_config,
+                )
             )
-        )
 
-    async_add_entities(entities)
+        async_add_entities(entities)
+        _LOGGER.debug("Sensor platform setup complete")
+        
+    except Exception as err:
+        _LOGGER.error(
+            "Error during sensor platform setup: %s",
+            err,
+            exc_info=True
+        )
+        raise
 
 
 class ImageSensorCoordinator(DataUpdateCoordinator):

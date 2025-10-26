@@ -10,7 +10,7 @@ import os
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 
-from const import (
+from .const import (
     SOURCE_FILE,
     SOURCE_CAMERA,
     PROCESSOR_ANALOG_GAUGE,
@@ -142,7 +142,7 @@ class SimpleAnalogGaugeProcessor:
             
             # Log detection summary at info level for easier monitoring
             try:
-                from debug_utils import log_detection_summary
+                from .debug_utils import log_detection_summary
                 log_detection_summary(needle_angle, value, self.config)
             except Exception as summary_e:
                 _LOGGER.warning("Could not log detection summary: %s", summary_e)
@@ -221,7 +221,7 @@ class SimpleAnalogGaugeProcessor:
                 
                 # Save debug images if logging is at debug level
                 try:
-                    from debug_utils import save_debug_image, create_detection_overlay
+                    from .debug_utils import save_debug_image, create_detection_overlay
                     if _LOGGER.isEnabledFor(logging.DEBUG):
                         # Save the processed grayscale image
                         save_debug_image(gray_array, "gauge_processed.png", "grayscale", self.sensor_name)

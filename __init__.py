@@ -27,7 +27,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = entry.data
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    try:
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    except Exception as err:
+        _LOGGER.error(
+            "Error setting up platforms for %s: %s", 
+            entry.entry_id, 
+            err, 
+            exc_info=True
+        )
+        raise
     
     # Set up services
     await async_setup_services(hass)

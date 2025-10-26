@@ -1,3 +1,62 @@
-__pycache__
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.tox/
+.coverage
+htmlcov/
+*.cover
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Linting reports
+.pylint_report.txt
+.mypy_report.txt
+.bandit_report.txt
+.flake8_report.txt
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+
+# Home Assistant specific
+home-assistant.log*
+home-assistant_v2.db*
+
+# Project specific
+outdate/
+tests/image_to_sensor_cv_debug/
 image_to_sensor_cv_debug/

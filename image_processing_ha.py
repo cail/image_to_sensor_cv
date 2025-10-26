@@ -17,7 +17,6 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .const import (
     SOURCE_FILE,
     SOURCE_CAMERA,
-    PROCESSOR_ANALOG_GAUGE,
     CONF_IMAGE_SOURCE,
     CONF_IMAGE_PATH,
     CONF_CAMERA_ENTITY,
@@ -142,3 +141,44 @@ class SimpleImageProcessor:
         except Exception as e:
             _LOGGER.error("Error getting image from camera: %s", e)
             return None
+
+    def crop_image(self, image: np.ndarray) -> np.ndarray:
+        """Crop image based on configuration."""
+        _LOGGER.debug("Checking crop configuration")
+        
+        if CONF_CROP_CONFIG not in self.config:
+            _LOGGER.debug("No crop configuration found, using full image")
+            return image
+            
+        crop_config = self.config[CONF_CROP_CONFIG]
+        x = crop_config.get(CONF_CROP_X, 0)
+        y = crop_config.get(CONF_CROP_Y, 0)
+        width = crop_config.get(CONF_CROP_WIDTH, image.shape[1])
+        height = crop_config.get(CONF_CROP_HEIGHT, image.shape[0])
+        
+        _LOGGER.debug("Original image shape: %s", image.shape)
+        _LOGGER.debug("Requested crop: x=%d, y=%d, width=%d, height=%d", x, y, width, height)
+        
+        # Ensure crop coordinates are within image bounds
+        orig_x, orig_y, orig_width, orig_height = x, y, width, height
+        x = max(0, min(x, image.shape[1]))
+        y = max(0, min(y, image.shape[0]))
+        width = min(width, image.shape[1] - x)
+        height = min(height, image.shape[0] - y)
+        
+        if (x, y, width, height) != (orig_x, orig_y, orig_width, orig_height):
+            _LOGGER.debug("Adjusted crop to fit image bounds: x=%d, y=%d, width=%d, height=%d", 
+                         x, y, width, height)
+        
+        cropped = image[y:y+height, x:x+width]
+        _LOGGER.debug("Cropped image shape: %s", cropped.shape)
+        
+        # Save debug image of cropped image
+        try:
+            from .debug_utils import save_debug_image
+            if _LOGGER.isEnabledFor(logging.DEBUG):
+                save_debug_image(cropped, "cropped.png", "processed", self.sensor_name)
+        except Exception as debug_e:
+            _LOGGER.warning("Could not save cropped debug image: %s", debug_e)
+        
+        return cropped
