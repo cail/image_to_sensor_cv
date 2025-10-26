@@ -20,7 +20,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, CONF_PROCESSORS, DEFAULT_SCAN_INTERVAL
+from .const import DOMAIN, CONF_PROCESSORS, CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
 
 # Always use the simple image processor since we're using minimal dependencies
 from .image_processing_simple import create_simple_processor as create_processor
@@ -28,6 +28,7 @@ from .image_processing_ha import SimpleImageProcessor as ImageProcessor
 
 _LOGGER = logging.getLogger(__name__)
 
+# Global SCAN_INTERVAL is no longer used, each coordinator has its own interval
 SCAN_INTERVAL = timedelta(seconds=DEFAULT_SCAN_INTERVAL)
 
 
@@ -93,11 +94,15 @@ class ImageSensorCoordinator(DataUpdateCoordinator):
         # Create processors based on configuration
         self._create_processors()
 
+        # Get scan interval from config or use default
+        scan_interval_seconds = config.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        update_interval = timedelta(seconds=scan_interval_seconds)
+
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=SCAN_INTERVAL,
+            update_interval=update_interval,
         )
 
     def _create_processors(self) -> None:
@@ -121,6 +126,11 @@ class ImageSensorCoordinator(DataUpdateCoordinator):
         self.image_processor = ImageProcessor(self.hass, new_config, base_sensor_name)
         # Recreate processors
         self._create_processors()
+        # Update scan interval if changed
+        scan_interval_seconds = new_config.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        new_update_interval = timedelta(seconds=scan_interval_seconds)
+        if self.update_interval != new_update_interval:
+            self.update_interval = new_update_interval
 
     async def _async_update_data(self) -> Dict[str, Any]:
         """Update data via library."""

@@ -12,6 +12,7 @@ CONF_CROP_Y = "crop_y"
 CONF_CROP_WIDTH = "crop_width"
 CONF_CROP_HEIGHT = "crop_height"
 CONF_PROCESSORS = "processors"
+CONF_SCAN_INTERVAL = "scan_interval"
 
 # Processor types
 PROCESSOR_ANALOG_GAUGE = "analog_gauge_reader"

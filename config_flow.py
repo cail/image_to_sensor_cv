@@ -23,6 +23,7 @@ from .const import (
     CONF_CROP_WIDTH,
     CONF_CROP_HEIGHT,
     CONF_PROCESSORS,
+    CONF_SCAN_INTERVAL,
     CONF_MIN_ANGLE_HOURS,
     CONF_MAX_ANGLE_HOURS,
     CONF_MIN_VALUE,
@@ -35,6 +36,7 @@ from .const import (
     DEFAULT_CROP_Y,
     DEFAULT_CROP_WIDTH,
     DEFAULT_CROP_HEIGHT,
+    DEFAULT_SCAN_INTERVAL,
     DEFAULT_MIN_ANGLE_HOURS,
     DEFAULT_MAX_ANGLE_HOURS,
     DEFAULT_MIN_VALUE,
@@ -154,6 +156,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_MIN_VALUE, default=DEFAULT_MIN_VALUE): vol.Coerce(float),
                 vol.Optional(CONF_MAX_VALUE, default=DEFAULT_MAX_VALUE): vol.Coerce(float),
                 vol.Optional(CONF_UNITS, default=DEFAULT_UNITS): str,
+                vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): vol.All(vol.Coerce(int), vol.Range(min=5, max=3600)),
             })
             
             return self.async_show_form(step_id="processor_config", data_schema=schema)
@@ -165,6 +168,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         }
         
         self.data[CONF_PROCESSORS] = [processor_config]
+        
+        # Store scan interval at the top level
+        self.data[CONF_SCAN_INTERVAL] = user_input.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
 
         return self.async_create_entry(title=self.data["name"], data=self.data)
 
@@ -266,6 +272,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_UNITS, 
                     default=processor_config.get(CONF_UNITS, DEFAULT_UNITS)
                 ): str,
+                vol.Optional(
+                    CONF_SCAN_INTERVAL,
+                    default=current_data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+                ): vol.All(vol.Coerce(int), vol.Range(min=5, max=3600)),
             })
             
             schema = vol.Schema(schema_fields)
@@ -315,6 +325,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             CONF_IMAGE_SOURCE: image_source,
             CONF_CROP_CONFIG: crop_config,
             CONF_PROCESSORS: [processor_config],
+            CONF_SCAN_INTERVAL: user_input.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
         }
         
         # Add the appropriate image source field
@@ -404,6 +415,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 CONF_UNITS, 
                 default=user_input.get(CONF_UNITS, DEFAULT_UNITS)
             ): str,
+            vol.Optional(
+                CONF_SCAN_INTERVAL,
+                default=user_input.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+            ): vol.All(vol.Coerce(int), vol.Range(min=5, max=3600)),
         })
         
         return vol.Schema(schema_fields)
@@ -491,6 +506,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_UNITS, 
                     default=processor_config.get(CONF_UNITS, DEFAULT_UNITS)
                 ): str,
+                vol.Optional(
+                    CONF_SCAN_INTERVAL,
+                    default=current_data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+                ): vol.All(vol.Coerce(int), vol.Range(min=5, max=3600)),
             })
             
             schema = vol.Schema(schema_fields)
@@ -583,6 +602,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_UNITS, 
                     default=user_input.get(CONF_UNITS, DEFAULT_UNITS)
                 ): str,
+                vol.Optional(
+                    CONF_SCAN_INTERVAL,
+                    default=user_input.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+                ): vol.All(vol.Coerce(int), vol.Range(min=5, max=3600)),
             }
             
             schema = vol.Schema(schema_fields)
@@ -619,6 +642,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             CONF_IMAGE_SOURCE: image_source,
             CONF_CROP_CONFIG: crop_config,
             CONF_PROCESSORS: [processor_config],
+            CONF_SCAN_INTERVAL: user_input.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
         }
         
         # Add image source specific data - only include the active field

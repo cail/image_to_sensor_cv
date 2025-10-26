@@ -75,7 +75,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             import base64
             import os
             from PIL import Image, ImageDraw
-            from .image_processing_simple import SimpleImageProcessor
+            from .image_processing_ha import SimpleImageProcessor
             from .const import (
                 CONF_CROP_CONFIG, CONF_CROP_X, CONF_CROP_Y, 
                 CONF_CROP_WIDTH, CONF_CROP_HEIGHT
