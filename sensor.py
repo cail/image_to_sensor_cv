@@ -188,7 +188,17 @@ class ImageSensorEntity(CoordinatorEntity, SensorEntity):
         
         # Set name based on processor type and index
         processor_type = processor_config["type"]
-        self._attr_name = f"{config_entry.title} {processor_type.replace('_', ' ').title()} {processor_index + 1}"
+        # Use "Gauge" for analog_gauge_reader, otherwise use formatted type name
+        if processor_type == "analog_gauge_reader":
+            type_display_name = "Gauge"
+        else:
+            type_display_name = processor_type.replace('_', ' ').title()
+        
+        # Only append number if there are multiple processors
+        if len(self.coordinator.config.get(CONF_PROCESSORS, [])) > 1:
+            self._attr_name = f"{config_entry.title} {type_display_name} {processor_index + 1}"
+        else:
+            self._attr_name = f"{config_entry.title} {type_display_name}"
         
         # Set unit of measurement from processor config
         if processor_type == "analog_gauge_reader":
@@ -199,6 +209,9 @@ class ImageSensorEntity(CoordinatorEntity, SensorEntity):
         # Set device class if applicable
         self._attr_device_class = None
         self._attr_state_class = SensorStateClass.MEASUREMENT
+        
+        # Set display precision to 2 decimal places
+        self._attr_suggested_display_precision = 2
 
     @property
     def native_value(self) -> Optional[float]:
