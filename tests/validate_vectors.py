@@ -14,6 +14,7 @@ import numpy as np
 from PIL import Image
 from typing import Optional
 from unittest.mock import MagicMock
+from glob import glob
 
 # Set up paths FIRST
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -251,10 +252,46 @@ def main():
         print("❌ tests.json not found!")
         return
     
+    # Expand test cases with file patterns
+    expanded_test_data = []
+    for test_case in test_data:
+        files_pattern = test_case.get('files')
+        
+        if files_pattern:
+            # Expand file pattern
+            pattern_path = os.path.join(os.path.dirname(testcases), files_pattern)
+            matching_files = glob(pattern_path)
+            
+            if matching_files:
+                print(f"📦 Expanding pattern '{files_pattern}' - found {len(matching_files)} files")
+                # Create a test case for each matching file
+                for file_path in matching_files:
+                    rel_path = os.path.relpath(file_path, os.path.dirname(testcases))
+                    expanded_case = test_case.copy()
+                    expanded_case['file'] = rel_path
+                    expanded_case['_pattern'] = files_pattern
+                    expanded_test_data.append(expanded_case)
+            else:
+                print(f"⚠️  No files found for pattern: {files_pattern}")
+                expanded_test_data.append(test_case)
+        else:
+            expanded_test_data.append(test_case)
+    
+    test_data = expanded_test_data
+    
     processor_results = []
+    pattern_stats = {}  # Track stats per pattern
     
     for i, test_case in enumerate(test_data, 1):
+        pattern = test_case.get('_pattern', test_case['file'])
+        
+        # Initialize pattern stats if needed
+        if pattern not in pattern_stats:
+            pattern_stats[pattern] = {'total': 0, 'passed': 0, 'warned': 0, 'failed': 0, 'errors': 0}
+        
         print(f"\n📋 Test {i}: {test_case['file']}")
+        if test_case.get('_pattern'):
+            print(f"   (from pattern: {test_case['_pattern']})")
         print("-" * 40)
         
         result = validate_test_vector(test_case)
@@ -293,6 +330,8 @@ def main():
             print(f"\n🔬 Processor Test (Actual Image Processing):")
             processor_result = process_with_gauge_processor(test_case, image_path)
             
+            pattern_stats[pattern]['total'] += 1
+            
             if processor_result and processor_result['success']:
                 print(f"  Detected Value: {processor_result['detected_value']:.3f}")
                 print(f"  Expected Value: {processor_result['expected_value']}")
@@ -300,17 +339,21 @@ def main():
                 
                 if processor_result['error_percent'] < 5:
                     print(f"  ✅ Processor detection accurate!")
-                    processor_results.append({'test': i, 'status': 'pass', 'error': processor_result['error']})
+                    processor_results.append({'test': i, 'status': 'pass', 'error': processor_result['error'], 'pattern': pattern})
+                    pattern_stats[pattern]['passed'] += 1
                 elif processor_result['error_percent'] < 10:
                     print(f"  ⚠️  Processor detection acceptable but could be improved")
-                    processor_results.append({'test': i, 'status': 'warning', 'error': processor_result['error']})
+                    processor_results.append({'test': i, 'status': 'warning', 'error': processor_result['error'], 'pattern': pattern})
+                    pattern_stats[pattern]['warned'] += 1
                 else:
                     print(f"  ❌ Processor detection error too high!")
-                    processor_results.append({'test': i, 'status': 'fail', 'error': processor_result['error']})
+                    processor_results.append({'test': i, 'status': 'fail', 'error': processor_result['error'], 'pattern': pattern})
+                    pattern_stats[pattern]['failed'] += 1
             else:
                 error_msg = processor_result.get('error', 'Unknown error') if processor_result else 'No result'
                 print(f"  ❌ Processor failed: {error_msg}")
-                processor_results.append({'test': i, 'status': 'error', 'error': error_msg})
+                processor_results.append({'test': i, 'status': 'error', 'error': error_msg, 'pattern': pattern})
+                pattern_stats[pattern]['errors'] += 1
     
     # Summary
     print(f"\n{'=' * 50}")
@@ -331,6 +374,20 @@ def main():
             print(f"  ❌ Failed: {failed}/{len(processor_results)}")
         if errors > 0:
             print(f"  ❌ Errors: {errors}/{len(processor_results)}")
+        
+        # Show pattern-based statistics if we have multiple patterns
+        if len(pattern_stats) > 1:
+            print(f"\n📦 Results by Pattern:")
+            for pattern, stats in pattern_stats.items():
+                if stats['total'] > 0:
+                    success_rate = (stats['passed'] / stats['total']) * 100 if stats['total'] > 0 else 0
+                    print(f"  {pattern}: {stats['passed']}/{stats['total']} passed ({success_rate:.1f}%)")
+                    if stats['warned'] > 0:
+                        print(f"    ⚠️  {stats['warned']} warnings")
+                    if stats['failed'] > 0:
+                        print(f"    ❌ {stats['failed']} failed")
+                    if stats['errors'] > 0:
+                        print(f"    ❌ {stats['errors']} errors")
         
         # Calculate average error for successful detections
         successful_errors = [r['error'] for r in processor_results if r['status'] in ['pass', 'warning'] and isinstance(r['error'], (int, float))]

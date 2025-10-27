@@ -14,6 +14,7 @@ import math
 from typing import Dict, List, Any, Optional, Tuple
 import asyncio
 from dataclasses import dataclass
+from glob import glob
 
 # Add parent directory to path to import our modules
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -45,6 +46,7 @@ class TestCase:
     max_value: float
     detected_angle: str  # e.g., "10am"
     expected_value: float
+    files: Optional[str] = None  # File pattern/mask for batch testing
     
     def __post_init__(self):
         """Convert clock time strings to degrees."""
@@ -107,8 +109,40 @@ class TestRunner:
             test_data = json.load(f)
             
         for test_dict in test_data:
+            # Get the files pattern if present
+            files_pattern = test_dict.get('files')
             test_case = TestCase(**test_dict)
-            self.test_cases.append(test_case)
+            
+            # If 'files' pattern is provided, expand it to multiple test cases
+            if files_pattern:
+                pattern_path = os.path.join(self.tests_dir, files_pattern)
+                matching_files = glob(pattern_path)
+                
+                if matching_files:
+                    _LOGGER.info(f"Found {len(matching_files)} files matching pattern: {files_pattern}")
+                    # Create a test case for each matching file
+                    for file_path in matching_files:
+                        # Get relative path from tests_dir
+                        rel_path = os.path.relpath(file_path, self.tests_dir)
+                        # Create new test case with this specific file
+                        expanded_test = TestCase(
+                            file=rel_path,
+                            start_angle=test_case.start_angle,
+                            end_angle=test_case.end_angle,
+                            min_value=test_case.min_value,
+                            max_value=test_case.max_value,
+                            detected_angle=test_case.detected_angle,
+                            expected_value=test_case.expected_value,
+                            files=files_pattern
+                        )
+                        self.test_cases.append(expanded_test)
+                else:
+                    _LOGGER.warning(f"No files found matching pattern: {files_pattern}")
+                    # Still add the original test case
+                    self.test_cases.append(test_case)
+            else:
+                # No files pattern, just add the single test case
+                self.test_cases.append(test_case)
             
         _LOGGER.info(f"Loaded {len(self.test_cases)} test cases")
         
@@ -198,18 +232,40 @@ class TestRunner:
         _LOGGER.info("🧪 STARTING IMAGE PROCESSING TESTS")
         _LOGGER.info("=" * 60)
         
-        for i, test_case in enumerate(self.test_cases, 1):
-            _LOGGER.info(f"\n📋 Test {i}/{len(self.test_cases)}: {test_case.file}")
-            result = await self.run_single_test(test_case)
-            self.results.append(result)
+        # Group tests by file pattern for reporting
+        pattern_groups = {}
+        for test_case in self.test_cases:
+            pattern = test_case.files if test_case.files else test_case.file
+            if pattern not in pattern_groups:
+                pattern_groups[pattern] = []
+            pattern_groups[pattern].append(test_case)
+        
+        test_num = 0
+        for pattern, tests in pattern_groups.items():
+            if len(tests) > 1:
+                _LOGGER.info(f"\n📦 Test Group: {pattern} ({len(tests)} files)")
+                _LOGGER.info("-" * 60)
             
-            # Log result
-            if result.success:
-                _LOGGER.info(f"✅ PASS - Value: {result.detected_value:.3f} (expected: {test_case.expected_value})")
-            else:
-                _LOGGER.error(f"❌ FAIL - {result.error_message}")
-                if result.detected_value is not None:
-                    _LOGGER.error(f"   Detected: {result.detected_value:.3f}, Expected: {test_case.expected_value}")
+            group_passed = 0
+            for test_case in tests:
+                test_num += 1
+                _LOGGER.info(f"\n📋 Test {test_num}/{len(self.test_cases)}: {test_case.file}")
+                result = await self.run_single_test(test_case)
+                self.results.append(result)
+                
+                # Log result
+                if result.success:
+                    _LOGGER.info(f"✅ PASS - Value: {result.detected_value:.3f} (expected: {test_case.expected_value})")
+                    group_passed += 1
+                else:
+                    _LOGGER.error(f"❌ FAIL - {result.error_message}")
+                    if result.detected_value is not None:
+                        _LOGGER.error(f"   Detected: {result.detected_value:.3f}, Expected: {test_case.expected_value}")
+            
+            # Group summary if multiple files
+            if len(tests) > 1:
+                _LOGGER.info(f"\n   Group Result: {group_passed}/{len(tests)} passed")
+                _LOGGER.info("=" * 60)
     
     def generate_report(self) -> str:
         """Generate a comprehensive test report."""
@@ -229,28 +285,45 @@ class TestRunner:
         report.append(f"Success Rate: {(passed/len(self.results)*100):.1f}%")
         report.append("")
         
-        # Detailed results
+        # Group results by file pattern
+        pattern_groups = {}
+        for result in self.results:
+            pattern = result.test_case.files if result.test_case.files else result.test_case.file
+            if pattern not in pattern_groups:
+                pattern_groups[pattern] = []
+            pattern_groups[pattern].append(result)
+        
+        # Detailed results grouped by pattern
         report.append("📊 DETAILED RESULTS:")
         report.append("-" * 80)
         
-        for i, result in enumerate(self.results, 1):
-            tc = result.test_case
-            status = "✅ PASS" if result.success else "❌ FAIL"
+        test_num = 0
+        for pattern, results in pattern_groups.items():
+            if len(results) > 1:
+                group_passed = sum(1 for r in results if r.success)
+                report.append(f"\n📦 Test Group: {pattern} ({group_passed}/{len(results)} passed)")
+                report.append("-" * 80)
             
-            report.append(f"Test {i}: {tc.file} - {status}")
-            report.append(f"  Image: {tc.file}")
-            report.append(f"  Range: {tc.start_angle} to {tc.end_angle} ({tc.start_angle_deg}° to {tc.end_angle_deg}°)")
-            report.append(f"  Values: {tc.min_value} to {tc.max_value}")
-            report.append(f"  Expected: {tc.detected_angle} → {tc.expected_value}")
-            
-            if result.detected_value is not None:
-                report.append(f"  Detected: {result.detected_value:.3f}")
-                report.append(f"  Error: {result.value_error:.3f}")
-            else:
-                report.append(f"  Error: {result.error_message}")
+            for result in results:
+                test_num += 1
+                tc = result.test_case
+                status = "✅ PASS" if result.success else "❌ FAIL"
                 
-            report.append(f"  Time: {result.processing_time:.2f}s")
-            report.append("")
+                report.append(f"Test {test_num}: {tc.file} - {status}")
+                if len(results) == 1:  # Show full details for single tests
+                    report.append(f"  Image: {tc.file}")
+                    report.append(f"  Range: {tc.start_angle} to {tc.end_angle} ({tc.start_angle_deg}° to {tc.end_angle_deg}°)")
+                    report.append(f"  Values: {tc.min_value} to {tc.max_value}")
+                    report.append(f"  Expected: {tc.detected_angle} → {tc.expected_value}")
+                
+                if result.detected_value is not None:
+                    report.append(f"  Detected: {result.detected_value:.3f}")
+                    report.append(f"  Error: {result.value_error:.3f}")
+                else:
+                    report.append(f"  Error: {result.error_message}")
+                    
+                report.append(f"  Time: {result.processing_time:.2f}s")
+                report.append("")
         
         # Summary statistics
         if self.results:

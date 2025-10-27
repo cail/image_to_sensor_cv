@@ -13,6 +13,7 @@ import math
 from typing import Dict, List, Any, Optional, Tuple
 import asyncio
 from dataclasses import dataclass
+from glob import glob
 
 # Mock numpy and PIL for basic testing
 class MockNumPy:
@@ -70,6 +71,7 @@ class TestCase:
     max_value: float
     detected_angle: str
     expected_value: float
+    files: Optional[str] = None  # File pattern/mask for batch testing
     
     def time_to_degrees(self, time_str: str) -> float:
         """Convert time string to degrees."""
@@ -160,8 +162,40 @@ class TestRunner:
             test_data = json.load(f)
             
         for test_dict in test_data:
+            # Remove 'files' from dict before creating TestCase, we'll handle it separately
+            files_pattern = test_dict.get('files')
             test_case = TestCase(**test_dict)
-            self.test_cases.append(test_case)
+            
+            # If 'files' pattern is provided, expand it to multiple test cases
+            if files_pattern:
+                pattern_path = os.path.join(self.tests_dir, files_pattern)
+                matching_files = glob(pattern_path)
+                
+                if matching_files:
+                    _LOGGER.info(f"Found {len(matching_files)} files matching pattern: {files_pattern}")
+                    # Create a test case for each matching file
+                    for file_path in matching_files:
+                        # Get relative path from tests_dir
+                        rel_path = os.path.relpath(file_path, self.tests_dir)
+                        # Create new test case with this specific file
+                        expanded_test = TestCase(
+                            file=rel_path,
+                            start_angle=test_case.start_angle,
+                            end_angle=test_case.end_angle,
+                            min_value=test_case.min_value,
+                            max_value=test_case.max_value,
+                            detected_angle=test_case.detected_angle,
+                            expected_value=test_case.expected_value,
+                            files=files_pattern
+                        )
+                        self.test_cases.append(expanded_test)
+                else:
+                    _LOGGER.warning(f"No files found matching pattern: {files_pattern}")
+                    # Still add the original test case
+                    self.test_cases.append(test_case)
+            else:
+                # No files pattern, just add the single test case
+                self.test_cases.append(test_case)
             
         _LOGGER.info(f"Loaded {len(self.test_cases)} test cases")
         
@@ -256,19 +290,42 @@ class TestRunner:
         print("      without actual image processing.")
         print()
         
-        for i, test_case in enumerate(self.test_cases, 1):
-            print(f"📋 Test {i}/{len(self.test_cases)}: {test_case.file}")
-            result = await self.run_single_test(test_case)
-            self.results.append(result)
+        # Group tests by file pattern for reporting
+        pattern_groups = {}
+        for test_case in self.test_cases:
+            pattern = test_case.files if test_case.files else test_case.file
+            if pattern not in pattern_groups:
+                pattern_groups[pattern] = []
+            pattern_groups[pattern].append(test_case)
+        
+        test_num = 0
+        for pattern, tests in pattern_groups.items():
+            if len(tests) > 1:
+                print(f"📦 Test Group: {pattern} ({len(tests)} files)")
+                print("-" * 60)
             
-            # Log result
-            if result.success:
-                print(f"✅ PASS - Calculated: {result.detected_value:.3f}, Expected: {test_case.expected_value}")
-            else:
-                print(f"❌ FAIL - {result.error_message}")
-                if result.detected_value is not None:
-                    print(f"   Calculated: {result.detected_value:.3f}, Expected: {test_case.expected_value}")
-            print()
+            group_passed = 0
+            for test_case in tests:
+                test_num += 1
+                print(f"📋 Test {test_num}/{len(self.test_cases)}: {test_case.file}")
+                result = await self.run_single_test(test_case)
+                self.results.append(result)
+                
+                # Log result
+                if result.success:
+                    print(f"✅ PASS - Calculated: {result.detected_value:.3f}, Expected: {test_case.expected_value}")
+                    group_passed += 1
+                else:
+                    print(f"❌ FAIL - {result.error_message}")
+                    if result.detected_value is not None:
+                        print(f"   Calculated: {result.detected_value:.3f}, Expected: {test_case.expected_value}")
+                print()
+            
+            # Group summary if multiple files
+            if len(tests) > 1:
+                print(f"   Group Result: {group_passed}/{len(tests)} passed")
+                print("=" * 60)
+                print()
     
     def generate_summary(self) -> str:
         """Generate test summary."""
