@@ -1,6 +1,5 @@
 [
     {
-        "file": "set1/pressure-heat-minute_10.jpg",
         "files": "set1/*.jpg",
         "start_angle": 7,
         "end_angle": 4.5,
@@ -15,13 +14,27 @@
         }
     },
     {
-        "file": "set2/pressure-water-minute_7.jpg",
+        "files": "set4/*.jpg",
+        "start_angle": 7,
+        "end_angle": 3,
+        "min_value": 0,
+        "max_value": 5,
+        "detected_angle": 10.5,
+        "expected_value": 2.0,
+        "crop_config": {
+            "crop_x": 0,
+            "crop_width": 80,
+            "crop_y": 0,
+            "crop_height": 95
+        }
+    },
+    {
         "files": "set2/*.jpg",
         "start_angle": 7.5,
         "end_angle": 4.5,
         "min_value": 0,
         "max_value": 6,
-        "detected_angle": 12.8,
+        "detected_angle": 12.4,
         "expected_value": 3.1,
 
         "crop_config": {
@@ -30,7 +43,6 @@
         }
     },
     {
-        "file": "set3/pressure-water-last.jpg",
         "files": "set3/*.jpg",
         "start_angle": 7.5,
         "end_angle": 4.5,

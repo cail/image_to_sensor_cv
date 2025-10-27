@@ -89,7 +89,7 @@ def log_detection_summary(angle: float, value: float, config: Dict[str, Any]) ->
 
 
 def create_detection_overlay(image_array: np.ndarray, center_x: int, center_y: int, 
-                           needle_angle: float, radius: int) -> np.ndarray:
+                           needle_angle: float, needle_start_radius: int, radius: int) -> np.ndarray:
     """Create a debug image with detection overlay."""
     try:
         # Create a copy for overlay
@@ -100,8 +100,8 @@ def create_detection_overlay(image_array: np.ndarray, center_x: int, center_y: i
             overlay = np.stack([overlay, overlay, overlay], axis=2)
         
         # Draw center point (red)
-        cv_y, cv_x = max(0, center_y-2), max(0, center_x-2)
-        overlay[cv_y:center_y+3, cv_x:center_x+3] = [255, 0, 0]  # Red center
+        cv_y, cv_x = max(0, center_y-1), max(0, center_x-1)
+        overlay[cv_y:center_y+2, cv_x:center_x+2] = [255, 0, 0]  # Red center
         
         math_angle = needle_angle
         
@@ -115,7 +115,7 @@ def create_detection_overlay(image_array: np.ndarray, center_x: int, center_y: i
         # Simple line drawing (basic implementation)
         # Draw points along the line
         steps = radius
-        for i in range(steps):
+        for i in range(needle_start_radius, steps):
             t = i / steps
             x = int(center_x + t * (end_x - center_x))
             y = int(center_y + t * (end_y - center_y))

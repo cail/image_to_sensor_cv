@@ -164,7 +164,7 @@ class SimpleAnalogGaugeProcessor:
             height, width = gray_array.shape
             # Search within reasonable radius
             needle_end_radius = min(width, height) // 4
-            needle_start_radius = 2  # Avoid center noise
+            needle_start_radius = needle_end_radius // 4  # Avoid center noise
             _LOGGER.debug("Starting needle detection - center: (%d, %d), radius: %d", cx, cy, needle_end_radius)
             
             best_angle = None
@@ -228,7 +228,7 @@ class SimpleAnalogGaugeProcessor:
                         save_debug_image(gray_array, "gauge_processed.png", "grayscale", self.sensor_name)
                         
                         # Create and save detection overlay (using math convention angle)
-                        overlay = create_detection_overlay(gray_array, cx, cy, best_angle, needle_end_radius)
+                        overlay = create_detection_overlay(gray_array, cx, cy, best_angle, needle_start_radius, needle_end_radius)
                         save_debug_image(overlay, "gauge_detection.png", "overlay", self.sensor_name)
                 except Exception as debug_e:
                     _LOGGER.warning("Could not save debug images: %s", debug_e)
