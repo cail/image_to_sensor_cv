@@ -111,6 +111,14 @@ def create_detection_overlay(image_array: np.ndarray, center_x: int, center_y: i
         # Fix: Use same coordinate system as detection (Y-axis flipped)
         end_x = int(center_x + radius * math.cos(angle_rad))
         end_y = int(center_y - radius * math.sin(angle_rad))  # Flip Y for image coordinates
+
+        # draw circle of gauge radius (blue)
+        for theta in range(0, 360, 5):
+            theta_rad = math.radians(theta)
+            circ_x = int(center_x + radius * math.cos(theta_rad))
+            circ_y = int(center_y - radius * math.sin(theta_rad))  # Flip Y for image coordinates
+            if 0 <= circ_x < overlay.shape[1] and 0 <= circ_y < overlay.shape[0]:
+                overlay[circ_y, circ_x] = [0, 0, 255]  # Blue circle
         
         # Simple line drawing (basic implementation)
         # Draw points along the line

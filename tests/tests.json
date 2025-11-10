@@ -9,7 +9,7 @@
         "expected_value": 2.0,
         "crop_config": {
             "crop_x": 0,
-            "crop_width": 90,
+            "xxcrop_width": 90,
             "crop_y": 0
         }
     },
@@ -23,9 +23,9 @@
         "expected_value": 2.0,
         "crop_config": {
             "crop_x": 0,
-            "crop_width": 80,
+            "xxcrop_width": 80,
             "crop_y": 0,
-            "crop_height": 95
+            "xxcrop_height": 95
         }
     },
     {

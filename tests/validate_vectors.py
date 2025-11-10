@@ -283,6 +283,10 @@ def main():
     pattern_stats = {}  # Track stats per pattern
     
     for i, test_case in enumerate(test_data, 1):
+
+        if 'file' not in test_case:
+            continue
+
         pattern = test_case.get('_pattern', test_case['file'])
         
         # Initialize pattern stats if needed

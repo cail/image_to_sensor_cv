@@ -26,6 +26,10 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# if true - instead of using best single circle candidate for gauge center,
+# use weighted average of top candidates
+USE_WEIGHTED_CENTER = False
+
 class SimpleAnalogGaugeProcessor:
     """Simplified analog gauge processor using PIL instead of OpenCV."""
 
@@ -121,14 +125,15 @@ class SimpleAnalogGaugeProcessor:
             _LOGGER.debug("Gray array stats - min: %d, max: %d, mean: %.2f", 
                          gray_array.min(), gray_array.max(), gray_array.mean())
             
-            # Find the center of the gauge (simplified approach)
+            # Find the center of the gauge using circle detection
             height, width = gray_array.shape
-            center_x, center_y = width // 2, height // 2
-            _LOGGER.debug("Gauge center calculated at: (%d, %d)", center_x, center_y)
+            center_x, center_y, gauge_radius = self._detect_gauge_center(gray_array)
+            
+            _LOGGER.debug("Gauge center detected at: (%d, %d), radius: %d", center_x, center_y, gauge_radius)
             
             # Use a simplified approach to find the needle
             # This assumes the darkest line from center is the needle
-            needle_angle = self._find_needle_angle_simple(gray_array, center_x, center_y)
+            needle_angle = self._find_needle_angle_simple(gray_array, center_x, center_y, gauge_radius)
             
             if needle_angle is None:
                 _LOGGER.warning("Could not detect needle angle")
@@ -155,17 +160,294 @@ class SimpleAnalogGaugeProcessor:
             _LOGGER.error("Traceback: %s", traceback.format_exc())
             return None
 
-    def _find_needle_angle_simple(self, gray_array: np.ndarray, cx: int, cy: int) -> Optional[float]:
+    def _detect_gauge_center(self, gray_array: np.ndarray) -> tuple[int, int, int]:
         """
-        Simplified needle detection using radial scanning.
-        Scans in radial directions from center to find the darkest path (needle).
+        Detect the center of a circular gauge by finding the circle with strongest edges.
+        
+        Gauges typically have a dark frame around them, creating strong edges at the border.
+        We scan various circle positions and radii to find the one with the strongest
+        edge gradient (largest brightness difference between inside and outside the circle).
+        
+        Args:
+            gray_array: Grayscale image as numpy array
+            
+        Returns:
+            Tuple of (center_x, center_y, radius) coordinates and detected gauge radius
         """
         try:
             height, width = gray_array.shape
-            # Search within reasonable radius
-            needle_end_radius = min(width, height) // 4
-            needle_start_radius = needle_end_radius // 4  # Avoid center noise
-            _LOGGER.debug("Starting needle detection - center: (%d, %d), radius: %d", cx, cy, needle_end_radius)
+            _LOGGER.debug("Starting gauge center detection on image size: %dx%d", width, height)
+            
+            # Initial center guess (image center)
+            initial_cx = width // 2
+            initial_cy = height // 2
+            
+            # Define search ranges
+            # Search for center within ±25% of image dimensions
+            search_range_x = int(width * 0.25)
+            search_range_y = int(height * 0.25)
+            
+            # Search for radius from 25% to 45% of the smaller dimension
+            # (assuming gauge takes at least 25% and up to 90% of the image)
+            min_dim = min(width, height)
+            min_radius = int(min_dim * 0.25)
+            max_radius = int(min_dim * 0.45)
+            
+            _LOGGER.debug("Search parameters:")
+            _LOGGER.debug("  Center search range: ±%d pixels (x), ±%d pixels (y)", search_range_x, search_range_y)
+            _LOGGER.debug("  Radius search range: %d to %d pixels", min_radius, max_radius)
+            
+            best_center = (initial_cx, initial_cy)
+            best_radius = min_radius
+            best_score = 0
+            
+            # Store all candidates for weighted average
+            candidates = []
+            
+            # Sample center positions (coarse grid search)
+            center_step = max(2, min(search_range_x, search_range_y) // 10)  # ~10 steps in each direction
+
+            _LOGGER.debug("Step size: %d pixels", center_step)
+            
+            for cy in range(initial_cy - search_range_y, initial_cy + search_range_y + 1, center_step):
+                if cy < 0 or cy >= height:
+                    continue
+                    
+                for cx in range(initial_cx - search_range_x, initial_cx + search_range_x + 1, center_step):
+                    if cx < 0 or cx >= width:
+                        continue
+                    
+                    # Try different radii for this center position
+                    radius_step = max(2, (max_radius - min_radius) // 10)  # ~10 steps
+                    
+                    for radius in range(min_radius, max_radius + 1, radius_step):
+                        score = self._measure_circle_edge_strength(gray_array, cx, cy, radius)
+                        
+                        if score > 0:  # Valid measurement
+                            candidates.append({
+                                'cx': cx,
+                                'cy': cy,
+                                'radius': radius,
+                                'score': score
+                            })
+                            
+                            if score > best_score:
+                                best_score = score
+                                best_center = (cx, cy)
+                                best_radius = radius
+            
+            if not candidates:
+                _LOGGER.warning("No valid circle candidates found, using image center")
+                return (initial_cx, initial_cy)
+            
+            # Sort candidates by score
+            candidates.sort(key=lambda x: x['score'], reverse=True)
+            
+            # Log top candidates with detailed breakdown
+            _LOGGER.debug("Top 10 circle candidates (by edge strength):")
+            for i, candidate in enumerate(candidates[:10]):
+                _LOGGER.debug("  %d. Center: (%3d, %3d), Radius: %3d, Edge Score: %8.2f",
+                            i+1, candidate['cx'], candidate['cy'], 
+                            candidate['radius'], candidate['score'])
+            
+            # Use weighted average of top candidates to refine center
+            # Take top 20% of candidates or at least top 5
+            num_top_candidates = max(5, len(candidates) // 5)
+            top_candidates = candidates[:num_top_candidates]
+            
+            # Weight by score
+            total_weight = sum(c['score'] for c in top_candidates)
+            if USE_WEIGHTED_CENTER and total_weight > 0:
+                _LOGGER.debug("Weighted center calculation details (top %d candidates):", num_top_candidates)
+                #for i, c in enumerate(top_candidates):
+                #    weight_pct = (c['score'] / total_weight) * 100
+                #    _LOGGER.debug("  %d. Center: (%3d, %3d), Radius: %3d, Score: %8.2f, Weight: %5.1f%%",
+                #                i+1, c['cx'], c['cy'], c['radius'], c['score'], weight_pct)
+                
+                weighted_cx = sum(c['cx'] * c['score'] for c in top_candidates) / total_weight
+                weighted_cy = sum(c['cy'] * c['score'] for c in top_candidates) / total_weight
+                
+                final_cx = int(round(weighted_cx))
+                final_cy = int(round(weighted_cy))
+                
+                _LOGGER.debug("Weighted result:")
+                _LOGGER.debug("  Total weight: %.2f", total_weight)
+                _LOGGER.debug("  Weighted center: (%.1f, %.1f) -> Final: (%d, %d)",
+                            weighted_cx, weighted_cy, final_cx, final_cy)
+            else:
+                final_cx, final_cy = best_center
+                _LOGGER.debug("Using best single candidate: (%d, %d)", final_cx, final_cy)
+            
+            # Save debug visualization if logging is at debug level
+            try:
+                from .debug_utils import save_debug_image
+                if _LOGGER.isEnabledFor(logging.DEBUG):
+                    # Create visualization with detected center and radius
+                    from PIL import Image, ImageDraw
+                    debug_img = Image.fromarray(gray_array).convert('RGB')
+                    draw = ImageDraw.Draw(debug_img)
+                    
+                    # Draw the best circle in green
+                    draw.ellipse(
+                        [final_cx - best_radius, final_cy - best_radius,
+                         final_cx + best_radius, final_cy + best_radius],
+                        outline=(0, 255, 0), width=2
+                    )
+                    
+                    # Draw center point in red
+                    marker_size = 5
+                    draw.ellipse(
+                        [final_cx - marker_size, final_cy - marker_size,
+                         final_cx + marker_size, final_cy + marker_size],
+                        fill=(255, 0, 0)
+                    )
+                    
+                    # Draw crosshair
+                    draw.line([final_cx - 20, final_cy, final_cx + 20, final_cy], 
+                             fill=(255, 0, 0), width=1)
+                    draw.line([final_cx, final_cy - 20, final_cx, final_cy + 20], 
+                             fill=(255, 0, 0), width=1)
+                    
+                    # Draw top 3 alternative circles in blue (semi-transparent effect via thinner line)
+                    for candidate in candidates[1:4]:
+                        draw.ellipse(
+                            [candidate['cx'] - candidate['radius'], 
+                             candidate['cy'] - candidate['radius'],
+                             candidate['cx'] + candidate['radius'], 
+                             candidate['cy'] + candidate['radius']],
+                            outline=(100, 100, 255), width=1
+                        )
+                    
+                    save_debug_image(np.array(debug_img), "gauge_center_detection.png", 
+                                   "center_detection", self.sensor_name)
+            except Exception as debug_e:
+                _LOGGER.warning("Could not save center detection debug image: %s", debug_e)
+            
+            return (final_cx, final_cy, best_radius)
+            
+        except Exception as e:
+            _LOGGER.error("Error detecting gauge center: %s", e)
+            import traceback
+            _LOGGER.error("Traceback: %s", traceback.format_exc())
+            # Fall back to image center and estimated radius
+            height, width = gray_array.shape
+            fallback_radius = min(width, height) // 4
+            return (width // 2, height // 2, fallback_radius)
+
+    def _measure_circle_edge_strength(self, gray_array: np.ndarray, 
+                                      cx: int, cy: int, radius: int) -> float:
+        """
+        Measure the edge strength at a circle's perimeter.
+        
+        This detects the gauge border by measuring the brightness gradient across
+        the circle boundary. A strong edge (dark frame around bright gauge) will
+        have a large difference between inner and outer samples.
+        
+        Args:
+            gray_array: Grayscale image
+            cx, cy: Circle center coordinates
+            radius: Circle radius
+            
+        Returns:
+            Edge strength score (higher = stronger edge), or 0 if invalid
+        """
+        try:
+            height, width = gray_array.shape
+            
+            # Sample points around the circle perimeter
+            # Use enough samples to get good coverage
+            num_samples = max(16, int(2 * math.pi * radius))
+            
+            # We'll measure the gradient by comparing brightness at three positions:
+            # - inside the circle (radius - offset)
+            # - on the circle edge (radius)
+            # - outside the circle (radius + offset)
+            # The gauge border should show: bright inside, dark on edge/outside
+            
+            inner_offset = max(3, radius // 10)  # Sample 10% inside
+            outer_offset = max(3, radius // 10)  # Sample 10% outside
+            
+            inner_brightness_sum = 0.0
+            edge_brightness_sum = 0.0
+            outer_brightness_sum = 0.0
+            valid_samples = 0
+            
+            for i in range(num_samples):
+                angle = (2 * math.pi * i) / num_samples
+                cos_a = math.cos(angle)
+                sin_a = math.sin(angle)
+                
+                # Calculate positions for inner, edge, and outer samples
+                x_inner = int(cx + (radius - inner_offset) * cos_a)
+                y_inner = int(cy + (radius - inner_offset) * sin_a)
+                
+                x_edge = int(cx + radius * cos_a)
+                y_edge = int(cy + radius * sin_a)
+                
+                x_outer = int(cx + (radius + outer_offset) * cos_a)
+                y_outer = int(cy + (radius + outer_offset) * sin_a)
+                
+                # Check if all three points are within image bounds
+                if (0 <= x_inner < width and 0 <= y_inner < height and
+                    0 <= x_edge < width and 0 <= y_edge < height and
+                    0 <= x_outer < width and 0 <= y_outer < height):
+                    
+                    inner_brightness_sum += float(gray_array[y_inner, x_inner])
+                    edge_brightness_sum += float(gray_array[y_edge, x_edge])
+                    outer_brightness_sum += float(gray_array[y_outer, x_outer])
+                    valid_samples += 1
+            
+            # Require at least 75% of samples to be valid
+            if valid_samples < (num_samples * 0.75):
+                return 0.0
+            
+            if valid_samples == 0:
+                return 0.0
+            
+            # Calculate average brightness for each ring
+            avg_inner = inner_brightness_sum / valid_samples
+            avg_edge = edge_brightness_sum / valid_samples
+            avg_outer = outer_brightness_sum / valid_samples
+            
+            # Edge strength is the gradient: we want inner to be bright and edge/outer to be dark
+            # Score based on the drop from inner to outer (typical gauge: bright face, dark frame)
+            # Also consider the edge itself being dark
+            
+            # Primary score: difference between inside and outside (positive = inside brighter)
+            gradient_score = avg_inner - avg_outer
+            
+            # Secondary score: edge should be darker than inside
+            edge_contrast = avg_inner - avg_edge
+            
+            # Combined score: favor circles where inside is brighter than outside
+            # and where there's a sharp transition at the edge
+            combined_score = gradient_score + (edge_contrast * 1)
+            
+            # Only return positive scores (we're looking for bright-to-dark transitions)
+            return max(0.0, combined_score)
+            
+        except Exception as e:
+            _LOGGER.debug("Error measuring circle edge strength: %s", e)
+            return 0.0
+
+    def _find_needle_angle_simple(self, gray_array: np.ndarray, cx: int, cy: int, gauge_radius: int) -> Optional[float]:
+        """
+        Simplified needle detection using radial scanning.
+        Scans in radial directions from center to find the darkest path (needle).
+        
+        Args:
+            gray_array: Grayscale image
+            cx, cy: Gauge center coordinates
+            gauge_radius: Detected gauge radius (used to determine needle search area)
+        """
+        try:
+            height, width = gray_array.shape
+            # Use the detected gauge radius to set needle search area
+            # Needle typically extends from center to about 70-80% of gauge radius
+            needle_end_radius = int(gauge_radius * 0.75)
+            needle_start_radius = max(5, needle_end_radius // 8)  # Avoid center noise, start from ~12.5% of needle length
+            _LOGGER.debug("Starting needle detection - center: (%d, %d), gauge_radius: %d, needle search: %d to %d", 
+                         cx, cy, gauge_radius, needle_start_radius, needle_end_radius)
             
             best_angle = None
             best_score = float('inf')
