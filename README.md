@@ -15,7 +15,8 @@ It works for me however, and can be further improved manually.
 - **Multiple Image Sources**: Support for local image files and Home Assistant camera entities
 - **Image Cropping**: Configurable cropping to focus on specific areas of the image
 - **Extensible Processors**: Modular architecture for different types of image analysis
-- **Analog Gauge Reader**: Built-in processor for reading analog gauge values using OpenCV
+- **Analog Gauge Reader**: Built-in processor for reading analog gauge values with or without OpenCV
+- **Gauge positioning**: Gauge position is detected smartly. However system still expects image is cropped, so gauge takes 40%-80% of overall image.
 
 ## Installation
 
@@ -53,7 +54,7 @@ Configure the analog gauge reader with these parameters:
 
 The analog gauge reader is based on computer vision techniques:
 
-1. **Circle Detection**: Uses Hough Circle Transform to detect the circular gauge
+1. **Circle Detection**: Uses Circle edge difference to detect the circular gauge
 2. **Needle Detection**: Applies thresholding and line detection to find the needle
 3. **Angle Calculation**: Calculates the needle angle relative to the gauge center
 4. **Value Mapping**: Maps the angle to the configured value range

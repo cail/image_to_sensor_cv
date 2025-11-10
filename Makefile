@@ -86,6 +86,11 @@ format:
 test:
 	python3 -m tests.validate_vectors
 
+publish:
+	rsync -arv ../image_to_sensor_cv \
+	   igor@drakosha:~/drakosha-config/ha-config/custom_components/ \
+	   --exclude ".venv" --exclude ".git" --exclude "__pycache__" --exclude "tests" --exclude "image_to_sensor_cv_debug"
+
 install:
 	@./validate.sh setup
 
